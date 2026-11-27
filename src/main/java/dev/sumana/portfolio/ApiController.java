@@ -2,60 +2,66 @@ package dev.sumana.portfolio;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
-import java.time.Instant;
-import java.util.Collection;
+import java.util.List;
 import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 @RestController
-@RequestMapping("/api/v1/investigation")
+@RequestMapping("/api/v1/cases")
 public class ApiController {
 
-    public record Request(@NotBlank String caseId) {
+    public record CreateRequest(@NotBlank String title, String notes) {
     }
 
-    public record Response(
-            String id,
-            String status,
-            String result,
-            Instant createdAt) {
+    public record UpdateRequest(@NotBlank String status, String assignedTo) {
     }
 
-    private final Map<String, Response> items = new ConcurrentHashMap<>();
+    private final CaseRepository repository;
+    private final GeminiService gemini;
 
-    @PostMapping
-    public Response create(@Valid @RequestBody Request request) {
-        String id = UUID.randomUUID().toString();
-        Response response = new Response(
-                id,
-                "CREATED",
-                "Case investigation workflow starter: " + request.caseId(),
-                Instant.now());
-
-        items.put(id, response);
-        return response;
+    public ApiController(CaseRepository repository, GeminiService gemini) {
+        this.repository = repository;
+        this.gemini = gemini;
     }
 
     @GetMapping
-    public Collection<Response> list() {
-        return items.values();
+    public List<CaseRecord> list() {
+        return repository.findAll();
+    }
+
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    public CaseRecord create(@Valid @RequestBody CreateRequest request) {
+        return repository.save(new CaseRecord(request.title(), request.notes()));
     }
 
     @GetMapping("/{id}")
-    public Response get(@PathVariable String id) {
-        Response item = items.get(id);
-        if (item == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Not found");
+    public CaseRecord get(@PathVariable Long id) {
+        return repository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Case not found"));
+    }
+
+    @PatchMapping("/{id}")
+    public CaseRecord update(@PathVariable Long id, @Valid @RequestBody UpdateRequest request) {
+        CaseRecord record = get(id);
+        record.setStatus(request.status());
+        record.setAssignedTo(request.assignedTo() == null ? "" : request.assignedTo());
+        return repository.save(record);
+    }
+
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void delete(@PathVariable Long id) {
+        if (!repository.existsById(id)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Case not found");
         }
-        return item;
+        repository.deleteById(id);
+    }
+
+    @PostMapping("/{id}/ai-summary")
+    public Map<String, String> summarize(@PathVariable Long id) {
+        return Map.of("summary", gemini.summarize(get(id).getNotes()));
     }
 }
