@@ -11,7 +11,8 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/v1/cases")
 public class ApiController {
 
-    public record CreateRequest(@NotBlank String title, String notes) {}\n    public record UpdateRequest(@NotBlank String status, String assignedTo) {}
+    public record CreateRequest(@NotBlank String title, String notes) {}
+    public record UpdateRequest(@NotBlank String status, String assignedTo) {}
 
     private final CaseService service;
 
