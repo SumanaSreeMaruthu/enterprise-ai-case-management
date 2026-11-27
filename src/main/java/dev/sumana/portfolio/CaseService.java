@@ -1,6 +1,7 @@
 package dev.sumana.portfolio;
 
 import java.util.List;
+import dev.sumana.portfolio.audit.ActivityService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -11,10 +12,12 @@ import org.springframework.web.server.ResponseStatusException;
 public class CaseService {
 
     private final CaseRepository repository;
+    private final ActivityService activity;
     private final GeminiService gemini;
 
-    public CaseService(CaseRepository repository, GeminiService gemini) {
+    public CaseService(CaseRepository repository, GeminiService gemini, ActivityService activity) {
         this.repository = repository;
+        this.activity = activity;
         this.gemini = gemini;
     }
 
@@ -29,7 +32,9 @@ public class CaseService {
 
     @Transactional
     public CaseRecord create(ApiController.CreateRequest request) {
-        return repository.save(new CaseRecord(request.title(), request.notes()));
+        CaseRecord saved = repository.save(new CaseRecord(request.title(), request.notes()));
+        activity.record("CREATED", "CaseRecord", saved.getId());
+        return saved;
     }
 
     @Transactional
@@ -38,6 +43,7 @@ public class CaseService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Record not found");
         }
         repository.deleteById(id);
+        activity.record("DELETED", "CaseRecord", id);
     }
 
     @Transactional
