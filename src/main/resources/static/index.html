@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>AI Case Management</title>
+  <style>
+    body{font:16px system-ui;max-width:920px;margin:40px auto;padding:0 20px;background:#f8fafc;color:#172033}
+    main,article{background:white;padding:20px;border-radius:12px;margin:12px 0;box-shadow:0 2px 12px #0001}
+    input,textarea,button,select{font:inherit;padding:10px;margin:6px;border:1px solid #cad3df;border-radius:6px}
+    textarea{display:block;width:90%;min-height:90px}button{cursor:pointer;background:#1e40af;color:white}
+    .error{color:#b91c1c}pre{white-space:pre-wrap}
+  </style>
+</head>
+<body>
+  <h1>Enterprise AI Case Management</h1>
+  <p>Portfolio demo. Use synthetic cases only. AI suggestions require human review.</p>
+  <main>
+    <h2>Create case</h2>
+    <form id="form"><input id="title" placeholder="Case title" required>
+      <textarea id="notes" placeholder="Investigation notes"></textarea>
+      <button>Create case</button>
+    </form>
+    <p id="message" role="status"></p>
+  </main>
+  <section id="cases"></section>
+<script>
+const api='/api/v1/cases';
+const el=id=>document.getElementById(id);
+async function call(url,options={}){
+  const response=await fetch(url,{...options,headers:{'Content-Type':'application/json'}});
+  if(!response.ok)throw new Error(await response.text());
+  return response.status===204?null:response.json();
+}
+async function load(){
+  try{
+    const cases=await call(api);
+    const container=el('cases');container.replaceChildren();
+    for(const item of cases){
+      const card=document.createElement('article');
+      const title=document.createElement('h3');title.textContent='#'+item.id+' '+item.title;
+      const detail=document.createElement('p');detail.textContent=item.status+' • Assigned to: '+(item.assignedTo||'Unassigned');
+      const notes=document.createElement('p');notes.textContent=item.notes||'No notes';
+      const summary=document.createElement('pre');
+      const select=document.createElement('select');
+      for(const status of ['OPEN','IN_PROGRESS','UNDER_REVIEW','CLOSED']){
+        const option=new Option(status,status);select.add(option);
+      }
+      select.value=item.status;
+      const save=document.createElement('button');save.textContent='Update status';
+      save.onclick=async()=>{try{await call(api+'/'+item.id,{method:'PATCH',body:JSON.stringify({status:select.value,assignedTo:item.assignedTo})});await load()}catch(e){alert(e.message)}};
+      const ai=document.createElement('button');ai.textContent='Generate AI summary';
+      ai.onclick=async()=>{summary.textContent='Loading...';try{const result=await call(api+'/'+item.id+'/ai-summary',{method:'POST'});summary.textContent=result.summary}catch(e){summary.textContent=e.message}};
+      const remove=document.createElement('button');remove.textContent='Delete';
+      remove.onclick=async()=>{if(confirm('Delete this case?')){await call(api+'/'+item.id,{method:'DELETE'});await load()}};
+      card.append(title,detail,notes,select,save,ai,remove,summary);container.append(card);
+    }
+  }catch(e){el('message').textContent=e.message}
+}
+el('form').onsubmit=async e=>{
+  e.preventDefault();
+  try{await call(api,{method:'POST',body:JSON.stringify({title:el('title').value,notes:el('notes').value})});e.target.reset();await load();el('message').textContent='Case created'}
+  catch(error){el('message').textContent=error.message}
+};
+load();
+</script>
+</body>
+</html>
