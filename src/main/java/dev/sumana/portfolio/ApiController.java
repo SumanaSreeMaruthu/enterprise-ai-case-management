@@ -51,4 +51,8 @@ public class ApiController {
     public void delete(@PathVariable Long id) {
         service.delete(id);
     }
+    @GetMapping("/search")
+    public List<CaseRecord> search(@RequestParam(required = false) String status) {
+        return service.search(status);
+    }
 }
